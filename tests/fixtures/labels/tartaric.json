@@ -1,0 +1,10 @@
+{
+ "expected": {
+  "name": "L-(+)-Tartaric acid",
+  "cas": "87-69-4",
+  "formula": "C4H6O6",
+  "quantity": 100,
+  "unit": "g",
+  "purity": "≥99.5%"
+ }
+}

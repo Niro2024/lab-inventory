@@ -1,0 +1,10 @@
+{
+ "expected": {
+  "name": "Gold(III) chloride trihydrate",
+  "cas": "16961-25-4",
+  "formula": "HAuCl4·3H2O",
+  "quantity": 1,
+  "unit": "g",
+  "purity": "≥99.9% trace metals basis"
+ }
+}

@@ -1,0 +1,6 @@
+backups/
+__pycache__/
+*.db
+*.db-*
+anthropic_key.txt
+*.env

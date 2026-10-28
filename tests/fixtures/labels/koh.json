@@ -1,0 +1,10 @@
+{
+ "expected": {
+  "name": "Potassium hydroxide",
+  "cas": "1310-58-3",
+  "formula": "KOH",
+  "quantity": 500,
+  "unit": "g",
+  "purity": "≥85%, pellets"
+ }
+}

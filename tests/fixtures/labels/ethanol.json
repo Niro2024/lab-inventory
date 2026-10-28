@@ -1,0 +1,10 @@
+{
+ "expected": {
+  "name": "Ethanol absolute",
+  "cas": "64-17-5",
+  "formula": "C2H6O",
+  "quantity": 2.5,
+  "unit": "L",
+  "purity": "≥99.8%"
+ }
+}

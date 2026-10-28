@@ -1,0 +1,4 @@
+room,unit,unit_kind,shelf,type,name,cas,formula,quantity,qty_unit,purity,sender,institution,added_by,notes
+Chem room 2.14,Upper right cabinet,cabinet,Shelf 1,chemical,2-Propanol,67-63-0,C3H8O,1,L,≥99.5%,,,Nir,
+Chem room 2.14,Fridge,fridge,Shelf 1,sample,5 nm gold nanoparticles,,,1,pcs,,Thomas,,Nir,citrate-capped
+Chem room 2.14,Flammables,flammables,Bottom,chemical,Ethanol absolute,64-17-5,C2H6O,2.5,L,≥99.8%,,,Nir,

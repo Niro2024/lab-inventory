@@ -1,0 +1,10 @@
+{
+ "expected": {
+  "name": "Nickel(II) sulfate hexahydrate",
+  "cas": "10101-97-0",
+  "formula": "NiSO4·6H2O",
+  "quantity": 250,
+  "unit": "g",
+  "purity": "99%"
+ }
+}

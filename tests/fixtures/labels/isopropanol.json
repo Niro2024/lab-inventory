@@ -1,0 +1,10 @@
+{
+ "expected": {
+  "name": "2-Propanol",
+  "cas": "67-63-0",
+  "formula": "C3H8O",
+  "quantity": 1,
+  "unit": "L",
+  "purity": "≥99.5%, ACS reagent"
+ }
+}
