@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Lab Inventory</title>
+  <!-- Fixed "front door" on GitHub Pages: the shelf QR codes point here, and this page forwards
+       to the lab server's current tunnel address, which server/tunnel.py keeps in tunnel.json. -->
+  <style>
+    :root { --bg: #f6f7f9; --text: #1b1f24; --muted: #5f6b7a; --accent: #1f6feb; color-scheme: light; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0f1216; --text: #e6e9ee; --muted: #9aa5b4; --accent: #4c8dff; color-scheme: dark; } }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; text-align: center; padding: 16px; box-sizing: border-box; }
+    p { margin: 6px 0; } .muted { color: var(--muted); font-size: .9rem; } a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <p>🧪 <strong>Lab Inventory</strong></p>
+    <p id="msg">Opening… · פותח…</p>
+  </main>
+  <script>
+    (async () => {
+      const msg = document.getElementById('msg');
+      const fail = () => {
+        msg.innerHTML = 'The lab server is offline or restarting. Try again in a minute.<br>' +
+          'שרת המעבדה כבוי או מופעל מחדש. נסו שוב בעוד דקה.<br><a href="">Try again · נסו שוב</a>';
+      };
+      try {
+        const r = await fetch('tunnel.json?t=' + Date.now(), { cache: 'no-store' });
+        const { url } = await r.json();
+        if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/.test(url || '')) return fail();
+        // Check the server answers before leaving, so a stale address shows a clear message.
+        const ok = await fetch(url.replace(/\/?$/, '/api/health'), { cache: 'no-store' }).then(x => x.ok, () => false);
+        if (!ok) return fail();
+        location.replace(url.replace(/\/?$/, '/') + location.hash);
+      } catch { fail(); }
+    })();
+  </script>
+</body>
+</html>

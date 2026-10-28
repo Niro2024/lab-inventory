@@ -25,7 +25,25 @@ The server listens on port 8765 on all network interfaces. Phones on the same ne
 
 Options: `--port`, `--host 127.0.0.1` (this computer only), `--data DIR`, `--backup DIR`, `--no-backup`. `AI_MODEL` overrides the label-reading model (default `claude-opus-5-5`).
 
-To start it automatically at logon, the setup creates a Windows Task Scheduler task named **Lab Inventory**. It runs `pythonw.exe server\server.py`, which has no console window.
+## Public access (phones anywhere)
+
+The university network blocks incoming connections, so phones reach the server through a free Cloudflare quick tunnel:
+
+```bash
+python server/tunnel.py
+```
+
+- It runs `cloudflared`, expected at `%LOCALAPPDATA%\LabInventory\cloudflared\cloudflared.exe`, which gets a random `https://…trycloudflare.com` address.
+- It writes that address to [docs/tunnel.json](docs/tunnel.json) and pushes the file to GitHub.
+- GitHub Pages serves [docs/index.html](docs/index.html) at **https://niro2024.github.io/lab-inventory/** as a fixed front door. The front door reads `tunnel.json` and forwards the visitor, keeping the `#/shelf/…` part of the address. The shelf QR codes point there (`PUBLIC_URL` in [js/config.js](js/config.js)), so they keep working when the tunnel address changes.
+- After a restart, the new address takes about a minute to publish. GitHub Pages may cache the old `tunnel.json` for up to 10 minutes.
+- The tunnel log is `backups/tunnel.log`.
+
+GitHub Pages must be turned on once: in the repository, open *Settings → Pages*, choose *Deploy from a branch*, then select *main* and */docs*.
+
+## Autostart
+
+`start-lab-inventory.cmd`, in the folder above this repository, starts both `server.py` and `tunnel.py` with `pythonw.exe`, so no windows open. A copy of it in the Windows Startup folder runs it at logon. To stop autostart, press Win+R, type `shell:startup`, and delete the file.
 
 ## API
 

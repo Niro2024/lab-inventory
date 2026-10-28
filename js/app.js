@@ -433,7 +433,8 @@ function qrSvg(text) {
 }
 
 export function shelfUrl(id) {
-  const base = CONFIG.PUBLIC_URL || (location.origin + location.pathname + (MOCK && !CONFIG.PUBLIC_URL && params.has('mock') ? '?mock=1' : ''));
+  // demo copies keep their own address, so their QR codes don't lead to the real lab server
+  const base = (!MOCK && CONFIG.PUBLIC_URL) || (location.origin + location.pathname + (MOCK && params.has('mock') ? '?mock=1' : ''));
   return `${base}#/shelf/${id}`;
 }
 
