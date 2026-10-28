@@ -28,6 +28,12 @@ export function mockBackend(storage = globalThis.localStorage, key = 'labinv-moc
     async upload(blob) {
       return await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
     },
+    async removeLocation(t, id, parts) {
+      for (const [tt, ids] of [['shelves', parts.shelves], ['units', parts.units], [t, [id]]]) {
+        data[tt] = table(tt).filter(x => !ids.includes(x.id));
+      }
+      save(data);
+    },
     reset() { data = {}; save(data); },
   };
 }
@@ -49,6 +55,8 @@ export function httpBackend(base = '', fetchFn = globalThis.fetch.bind(globalThi
     insert: (t, row) => call('POST', t, row),
     update: (t, id, patch) => call('PATCH', `${t}/${encodeURIComponent(id)}`, patch),
     async upload(blob) { return (await call('POST', 'upload', blob, 'image/jpeg')).url; },
+    // the server checks emptiness itself and removes what is inside the location
+    async removeLocation(t, id) { await call('DELETE', `${t}/${encodeURIComponent(id)}`); },
   };
 }
 
@@ -76,6 +84,19 @@ export function createDb(backend) {
       backend.insert('units', { id: newId(), room_id, name: requireName(name), kind, created_at: now() }),
     addShelf: (unit_id, name) => backend.insert('shelves', { id: newId(), unit_id, name: requireName(name), created_at: now() }),
     rename: (table, id, name) => backend.update(table, id, { name: requireName(name) }),
+    // A room / unit / shelf added by mistake can be removed while no item (even a used-up one) was ever in it.
+    async locationParts(table, id) {
+      const [loc, items] = await Promise.all([this.locations(), backend.all('items')]);
+      const units = loc.units.filter(u => (table === 'rooms' && u.room_id === id) || (table === 'units' && u.id === id));
+      const unitIds = new Set(units.map(u => u.id));
+      const shelfIds = new Set(loc.shelves.filter(s => unitIds.has(s.unit_id) || (table === 'shelves' && s.id === id)).map(s => s.id));
+      return { units: [...unitIds], shelves: [...shelfIds], empty: !items.some(i => shelfIds.has(i.shelf_id)) };
+    },
+    async removeLocation(table, id) {
+      const p = await this.locationParts(table, id);
+      if (!p.empty) throw new Error('not empty');
+      await backend.removeLocation(table, id, p);
+    },
 
     async members() { return (await backend.all('members')).sort((a, b) => a.name.localeCompare(b.name)); },
     async addMember(name) {

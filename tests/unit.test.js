@@ -135,10 +135,23 @@ test('db: add / move / used up / restore are all logged with who and when', asyn
   eq(shelfPath(loc, s2.id), 'Chem room › Upper right › Shelf 2');
   eq((await db.item(it.id)).shelf_id, s2.id);
 });
-test('db: nothing can be deleted', () => {
+test('db: items and history can never be deleted', () => {
   const be = mockBackend(memStore()); const db = createDb(be);
   ok(!('delete' in be) && !('remove' in be));
-  ok(!Object.keys(db).some(k => /delete|remove/i.test(k)), Object.keys(db).join());
+  ok(!Object.keys(db).some(k => /delete|remove/i.test(k) && k !== 'removeLocation'), Object.keys(db).join());
+});
+test('db: a location can be removed only while nothing was ever stored in it', async () => {
+  const db = createDb(mockBackend(memStore()));
+  const r = await db.addRoom('Lab'); const u = await db.addUnit(r.id, 'Wrong cabinet'); await db.addShelf(u.id, 'S1');
+  const u2 = await db.addUnit(r.id, 'Used cabinet'); const s2 = await db.addShelf(u2.id, 'S2');
+  const it = await db.addItem({ name: 'KOH', shelf_id: s2.id }, 'Nir'); await db.markUsedUp(it.id, 'Nir');
+  await db.removeLocation('units', u.id);
+  let loc = await db.locations();
+  eq(loc.units.map(x => x.name), ['Used cabinet']); eq(loc.shelves.map(x => x.name), ['S2']);
+  let err = null; try { await db.removeLocation('units', u2.id); } catch (e) { err = e; }
+  ok(err, 'a cabinet that held a (used-up) item must stay');
+  err = null; try { await db.removeLocation('rooms', r.id); } catch (e) { err = e; }
+  ok(err, 'its room must stay too');
 });
 test('db: members are de-duplicated, empty names rejected', async () => {
   const db = createDb(mockBackend(memStore()));

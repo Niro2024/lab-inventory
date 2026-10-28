@@ -407,6 +407,21 @@ function renameable(table, obj, label) {
   return wrap;
 }
 
+// Remove a location added by mistake. Shown only while nothing was ever stored in it;
+// the first click asks, the second removes.
+function removable(table, obj) {
+  const { units, shelves } = state.loc;
+  const unitIds = table === 'rooms' ? units.filter(u => u.room_id === obj.id).map(u => u.id) : table === 'units' ? [obj.id] : [];
+  const shelfIds = table === 'shelves' ? [obj.id] : shelves.filter(s => unitIds.includes(s.unit_id)).map(s => s.id);
+  if (state.items.some(i => shelfIds.includes(i.shelf_id))) return null;
+  const btn = h('button', { type: 'button', class: 'icon', title: t('remove'), 'aria-label': `${t('remove')} ${obj.name}`, onclick: async () => {
+    if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = t('confirmRemove'); btn.classList.add('err'); return; }
+    try { await db.removeLocation(table, obj.id); toast(t('removed')); } catch (e) { toast(`${t('notEmpty')} (${e.message})`, 'err'); }
+    await refresh(); viewLocations();
+  } }, '🗑');
+  return btn;
+}
+
 function viewLocations() {
   const { rooms, units, shelves } = state.loc;
   const count = sid => state.items.filter(i => i.shelf_id === sid && i.status !== 'used_up').length;
@@ -414,12 +429,12 @@ function viewLocations() {
     h('h1', {}, t('locations')),
     h('p', {}, h('a', { class: 'button', href: '#/labels' }, `🖨️ ${t('printLabels')}`)),
     h('ul', { class: 'tree' }, rooms.map(r => h('li', { class: 'room' },
-      h('div', { class: 'tree-head' }, '🚪 ', renameable('rooms', r, r.name)),
+      h('div', { class: 'tree-head' }, '🚪 ', renameable('rooms', r, r.name), removable('rooms', r)),
       h('ul', {}, units.filter(u => u.room_id === r.id).map(u => h('li', { class: 'unit' },
-        h('div', { class: 'tree-head' }, `${KIND_ICON[u.kind] || ''} `, renameable('units', u, u.name), h('span', { class: 'muted' }, ` (${t(`kind_${u.kind}`)})`)),
+        h('div', { class: 'tree-head' }, `${KIND_ICON[u.kind] || ''} `, renameable('units', u, u.name), h('span', { class: 'muted' }, ` (${t(`kind_${u.kind}`)})`), removable('units', u)),
         h('ul', {}, shelves.filter(s => s.unit_id === u.id).map(s => h('li', { class: 'shelf' },
           h('a', { href: `#/shelf/${s.id}` }, s.name), h('span', { class: 'muted' }, ` · ${t('nItems', count(s.id))}`),
-          ' ', renameable('shelves', s, ''))),
+          ' ', renameable('shelves', s, ''), removable('shelves', s))),
         h('li', {}, inlineAdd('newShelf', name => db.addShelf(u.id, name)))))),
       h('li', {}, inlineAdd('newUnit', (name, kind) => db.addUnit(r.id, name, kind),
         h('select', { 'aria-label': t('unitKind') }, KINDS.map(k => h('option', { value: k }, `${KIND_ICON[k]} ${t(`kind_${k}`)}`)))))))),

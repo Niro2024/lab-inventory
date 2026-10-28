@@ -14,7 +14,8 @@ API (the app's db.js `httpBackend` speaks this):
   PATCH /api/<table>/<id>       merge fields into a row (not allowed for events)
   POST  /api/upload             JPEG body -> {"url": "photos/..."}
   POST  /api/extract-label      {"image": base64, "media_type": ...} -> label fields
-There is deliberately no delete.
+  DELETE /api/<rooms|units|shelves>/<id>   remove a location that never held an item
+Items, members and the history log can never be deleted.
 """
 import argparse
 import contextlib
@@ -28,6 +29,7 @@ import re
 import secrets
 import shutil
 import sqlite3
+import sys
 import threading
 import time
 from urllib.parse import unquote, urlsplit
@@ -35,6 +37,7 @@ from urllib.parse import unquote, urlsplit
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TABLES = {"rooms", "units", "shelves", "members", "items", "events"}
 APPEND_ONLY = {"events"}
+LOCATIONS = {"rooms", "units", "shelves"}  # removable only while empty; items and history never are
 MAX_BODY = 12_000_000
 STATIC_DIRS = ("js/", "css/", "tests/")  # anything else under ROOT is not served
 
@@ -87,6 +90,22 @@ class Store:
             c.execute("update rows set data=? where tbl=? and id=?",
                       (json.dumps(row, ensure_ascii=False), tbl, id_))
         return row
+
+    def remove_location(self, tbl, id_):
+        """Remove a room, unit or shelf (with what is inside it) - only if no item was ever stored there,
+        so mistakes can be fixed without losing any item or its history."""
+        with write_lock, self.connect() as c:
+            rows = lambda t: [json.loads(d) for (d,) in c.execute("select data from rows where tbl=?", (t,))]
+            units = [u for u in rows("units") if (tbl == "rooms" and u["room_id"] == id_) or (tbl == "units" and u["id"] == id_)]
+            unit_ids = {u["id"] for u in units}
+            shelves = [s for s in rows("shelves") if s["unit_id"] in unit_ids or (tbl == "shelves" and s["id"] == id_)]
+            shelf_ids = {s["id"] for s in shelves}
+            if not c.execute("select 1 from rows where tbl=? and id=?", (tbl, id_)).fetchone():
+                raise KeyError(f"{tbl}/{id_} not found")
+            if any(i.get("shelf_id") in shelf_ids for i in rows("items")):
+                raise ValueError("Not empty: move its items elsewhere first")
+            for t, ids in (("shelves", shelf_ids), ("units", unit_ids), (tbl, {id_})):
+                c.executemany("delete from rows where tbl=? and id=?", [(t, i) for i in ids])
 
     def save_photo(self, jpeg: bytes):
         day = dt.date.today().isoformat()
@@ -282,9 +301,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.send_json({"error": str(e)}, 400)
 
     def do_DELETE(self):
-        self.send_json({"error": "nothing can be deleted"}, 405)
+        api = self.route()
+        if not (api and len(api) == 2 and api[0] in LOCATIONS):
+            return self.send_json({"error": "nothing can be deleted"}, 405)
+        try:
+            self.store.remove_location(api[0], api[1])
+            return self.send_json({"ok": True})
+        except KeyError as e:
+            return self.send_json({"error": str(e)}, 404)
+        except ValueError as e:
+            return self.send_json({"error": str(e)}, 409)
 
-    do_PUT = do_DELETE
+    def do_PUT(self):
+        self.send_json({"error": "not supported"}, 405)
 
 
 def daily_backups(store, dest):
@@ -304,6 +333,11 @@ def main():
     ap.add_argument("--backup", default=str(ROOT / "backups"))
     ap.add_argument("--no-backup", action="store_true")
     a = ap.parse_args()
+
+    if sys.stderr is None:  # started with pythonw (autostart): no console, so log to a file
+        log_dir = pathlib.Path(a.backup)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        sys.stdout = sys.stderr = open(log_dir / "server.log", "a", encoding="utf-8", buffering=1)
 
     Handler.store = Store(pathlib.Path(a.data))
     if not a.no_backup:
