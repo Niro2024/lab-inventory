@@ -252,7 +252,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.send_json(extract_label(self.store.dir, image, media))
                 except Exception as e:  # AI problems must not break manual entry
                     print("extract-label:", e)
-                    return self.send_json({"error": str(e)}, 502)
+                    # 200, not 5xx: a tunnel in front replaces 5xx bodies with its own error page
+                    return self.send_json({"error": str(e)})
             if api and len(api) == 1 and api[0] in TABLES:
                 row = json.loads(self.body())
                 if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not re.fullmatch(r"[\w-]{1,40}", row["id"]):

@@ -29,6 +29,8 @@ export async function extractLabel(file, { mock }) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: await toBase64(jpeg), media_type: 'image/jpeg' }),
   });
-  if (!r.ok) throw new Error(`extract-label ${r.status}: ${await r.text()}`);
-  return r.json();
+  const out = await r.json().catch(() => null);
+  if (!r.ok || !out) throw new Error(`server error ${r.status}`);
+  if (out.error) throw new Error(String(out.error).slice(0, 200));
+  return out;
 }

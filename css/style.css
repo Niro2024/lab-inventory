@@ -83,7 +83,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .hint { font-size: .8rem; }
 .hint.ok { color: var(--ok); }
 .warn, .hint.warn { color: var(--warn); }
-.status { margin: 0; min-height: 1.4em; color: var(--muted); }
+.status { margin: 0; min-height: 1.4em; color: var(--muted); overflow-wrap: anywhere; }
 .photo-box { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .photo-box input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .photo-box label.button:focus-within { outline: 2px solid var(--accent); }
