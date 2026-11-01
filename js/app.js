@@ -414,9 +414,13 @@ function removable(table, obj) {
   const unitIds = table === 'rooms' ? units.filter(u => u.room_id === obj.id).map(u => u.id) : table === 'units' ? [obj.id] : [];
   const shelfIds = table === 'shelves' ? [obj.id] : shelves.filter(s => unitIds.includes(s.unit_id)).map(s => s.id);
   if (state.items.some(i => shelfIds.includes(i.shelf_id))) return null;
-  const btn = h('button', { type: 'button', class: 'icon', title: t('remove'), 'aria-label': `${t('remove')} ${obj.name}`, onclick: async () => {
+  return twoTapRemove(obj.name, () => db.removeLocation(table, obj.id), t('notEmpty'));
+}
+
+function twoTapRemove(name, run, failText) {
+  const btn = h('button', { type: 'button', class: 'icon', title: t('remove'), 'aria-label': `${t('remove')} ${name}`, onclick: async () => {
     if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = t('confirmRemove'); btn.classList.add('err'); return; }
-    try { await db.removeLocation(table, obj.id); toast(t('removed')); } catch (e) { toast(`${t('notEmpty')} (${e.message})`, 'err'); }
+    try { await run(); toast(t('removed')); } catch (e) { toast(`${failText} (${e.message})`, 'err'); }
     await refresh(); viewLocations();
   } }, '🗑');
   return btn;
@@ -438,7 +442,11 @@ function viewLocations() {
         h('li', {}, inlineAdd('newShelf', name => db.addShelf(u.id, name)))))),
       h('li', {}, inlineAdd('newUnit', (name, kind) => db.addUnit(r.id, name, kind),
         h('select', { 'aria-label': t('unitKind') }, KINDS.map(k => h('option', { value: k }, `${KIND_ICON[k]} ${t(`kind_${k}`)}`)))))))),
-      h('li', {}, inlineAdd('newRoom', name => db.addRoom(name)))));
+      h('li', {}, inlineAdd('newRoom', name => db.addRoom(name)))),
+    h('h2', {}, t('members')),
+    h('p', { class: 'muted' }, t('membersHelp')),
+    h('ul', { class: 'tree' }, state.members.map(m => h('li', {},
+      h('div', { class: 'tree-head' }, '👤 ', m.name, ' ', twoTapRemove(m.name, () => db.removeMember(m.id), t('saveError')))))));
 }
 
 function qrSvg(text) {

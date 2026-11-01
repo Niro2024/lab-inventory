@@ -1,7 +1,7 @@
 // Data layer. Both backends expose the same tiny table API
 // (all / insert / update / upload); all inventory logic lives here on top of it,
 // so the mock used in tests runs exactly the same code as production.
-// There is intentionally no delete operation anywhere.
+// Items and history can never be deleted; only empty locations and names on the members list can.
 
 export const newId = () => {
   const a = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -34,6 +34,7 @@ export function mockBackend(storage = globalThis.localStorage, key = 'labinv-moc
       }
       save(data);
     },
+    async removeMember(id) { data.members = table('members').filter(m => m.id !== id); save(data); },
     reset() { data = {}; save(data); },
   };
 }
@@ -57,6 +58,7 @@ export function httpBackend(base = '', fetchFn = globalThis.fetch.bind(globalThi
     async upload(blob) { return (await call('POST', 'upload', blob, 'image/jpeg')).url; },
     // the server checks emptiness itself and removes what is inside the location
     async removeLocation(t, id) { await call('DELETE', `${t}/${encodeURIComponent(id)}`); },
+    async removeMember(id) { await call('DELETE', `members/${encodeURIComponent(id)}`); },
   };
 }
 
@@ -104,6 +106,8 @@ export function createDb(backend) {
       const existing = (await backend.all('members')).find(m => m.name.toLowerCase() === name.toLowerCase());
       return existing || backend.insert('members', { id: newId(), name, created_at: now() });
     },
+    // Only takes the name off the list: items and history store the name itself and keep it.
+    removeMember: id => backend.removeMember(id),
 
     items: () => backend.all('items'),
     async item(id) { return (await backend.all('items')).find(i => i.id === id) || null; },

@@ -138,7 +138,7 @@ test('db: add / move / used up / restore are all logged with who and when', asyn
 test('db: items and history can never be deleted', () => {
   const be = mockBackend(memStore()); const db = createDb(be);
   ok(!('delete' in be) && !('remove' in be));
-  ok(!Object.keys(db).some(k => /delete|remove/i.test(k) && k !== 'removeLocation'), Object.keys(db).join());
+  ok(!Object.keys(db).some(k => /delete|remove/i.test(k) && !['removeLocation', 'removeMember'].includes(k)), Object.keys(db).join());
 });
 test('db: a location can be removed only while nothing was ever stored in it', async () => {
   const db = createDb(mockBackend(memStore()));
@@ -152,6 +152,15 @@ test('db: a location can be removed only while nothing was ever stored in it', a
   ok(err, 'a cabinet that held a (used-up) item must stay');
   err = null; try { await db.removeLocation('rooms', r.id); } catch (e) { err = e; }
   ok(err, 'its room must stay too');
+});
+test('db: removing a member keeps their name on items and history', async () => {
+  const db = createDb(mockBackend(memStore()));
+  const m = await db.addMember('Nir Yuran'); await db.addMember('Nir');
+  const it = await db.addItem({ name: 'KOH' }, 'Nir Yuran');
+  await db.removeMember(m.id);
+  eq((await db.members()).map(x => x.name), ['Nir']);
+  eq((await db.item(it.id)).added_by, 'Nir Yuran');
+  eq((await db.history(it.id))[0].by, 'Nir Yuran');
 });
 test('db: members are de-duplicated, empty names rejected', async () => {
   const db = createDb(mockBackend(memStore()));

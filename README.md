@@ -78,5 +78,5 @@ No login is needed. Anyone who can reach the server can view, add and edit, whic
 
 ## Tests
 
-- Unit tests: open `/tests/index.html` on the running server (19 tests: CAS checksum, search, PubChem parsing, translations, history logic, Excel export).
+- Unit tests: open `/tests/index.html` on the running server (21 tests: CAS checksum, search, PubChem parsing, translations, history logic, Excel export).
 - End-to-end checklist and the last results: [tests/SELF_TEST_REPORT.md](tests/SELF_TEST_REPORT.md).

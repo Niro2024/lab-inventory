@@ -15,7 +15,8 @@ API (the app's db.js `httpBackend` speaks this):
   POST  /api/upload             JPEG body -> {"url": "photos/..."}
   POST  /api/extract-label      {"image": base64, "media_type": ...} -> label fields
   DELETE /api/<rooms|units|shelves>/<id>   remove a location that never held an item
-Items, members and the history log can never be deleted.
+  DELETE /api/members/<id>     take a name off the members list (items and history keep the name)
+Items and the history log can never be deleted.
 """
 import argparse
 import contextlib
@@ -106,6 +107,12 @@ class Store:
                 raise ValueError("Not empty: move its items elsewhere first")
             for t, ids in (("shelves", shelf_ids), ("units", unit_ids), (tbl, {id_})):
                 c.executemany("delete from rows where tbl=? and id=?", [(t, i) for i in ids])
+
+    def remove_member(self, id_):
+        """Take a name off the members list. Items and events store the name itself, so nothing else changes."""
+        with write_lock, self.connect() as c:
+            if not c.execute("delete from rows where tbl='members' and id=?", (id_,)).rowcount:
+                raise KeyError(f"members/{id_} not found")
 
     def save_photo(self, jpeg: bytes):
         day = dt.date.today().isoformat()
@@ -302,10 +309,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         api = self.route()
-        if not (api and len(api) == 2 and api[0] in LOCATIONS):
+        if not (api and len(api) == 2 and (api[0] in LOCATIONS or api[0] == "members")):
             return self.send_json({"error": "nothing can be deleted"}, 405)
         try:
-            self.store.remove_location(api[0], api[1])
+            if api[0] == "members":
+                self.store.remove_member(api[1])
+            else:
+                self.store.remove_location(api[0], api[1])
             return self.send_json({"ok": True})
         except KeyError as e:
             return self.send_json({"error": str(e)}, 404)
