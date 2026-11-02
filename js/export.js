@@ -2,7 +2,8 @@
 import { shelfPath } from './db.js';
 
 export const EXPORT_COLUMNS = ['Name', 'Type', 'CAS', 'Formula', 'Quantity', 'Unit', 'Purity', 'GHS',
-  'Location', 'Added by', 'Date added', 'Status', 'Sender', 'Institution', 'Notes', 'SDS'];
+  'Location', 'Added by', 'Date added', 'Status', 'Sender', 'Institution',
+  'Manufacturer', 'Model', 'Serial number', 'Asset tag', 'Notes', 'SDS'];
 
 export function exportRows(items, loc) {
   return [...items]
@@ -13,7 +14,9 @@ export function exportRows(items, loc) {
       GHS: (i.ghs || []).join(', '), Location: shelfPath(loc, i.shelf_id),
       'Added by': i.added_by || '', 'Date added': (i.created_at || '').slice(0, 10),
       Status: i.status === 'used_up' ? 'used up' : 'active',
-      Sender: i.sender || '', Institution: i.institution || '', Notes: i.notes || '', SDS: i.sds_url || '',
+      Sender: i.sender || '', Institution: i.institution || '',
+      Manufacturer: i.manufacturer || '', Model: i.model || '', 'Serial number': i.serial || '', 'Asset tag': i.asset_tag || '',
+      Notes: i.notes || '', SDS: i.sds_url || '',
     }));
 }
 

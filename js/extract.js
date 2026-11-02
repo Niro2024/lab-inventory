@@ -1,4 +1,4 @@
-// Label photo -> fields, via the lab server's /api/extract-label (the AI key stays on the server).
+// Label / sample / device photo -> fields, via the lab server's /api/extract-label (the AI key stays on the server).
 // In demo/mock mode a stub returns the recorded answer for the test fixtures.
 
 // Downscale to keep uploads and AI calls small (labels stay readable at 1600 px).
@@ -17,8 +17,9 @@ const toBase64 = blob => new Promise(res => {
   fr.readAsDataURL(blob);
 });
 
-export async function extractLabel(file, { mock }) {
+export async function extractLabel(file, { mock, kind = 'chemical' }) {
   if (mock) {
+    if (kind !== 'chemical') return {};
     const base = String(file.name || '').replace(/\.[^.]+$/, '');
     const r = await fetch(`tests/fixtures/labels/${encodeURIComponent(base)}.json`);
     return r.ok ? (await r.json()).expected : {};
@@ -27,7 +28,7 @@ export async function extractLabel(file, { mock }) {
   const r = await fetch('api/extract-label', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: await toBase64(jpeg), media_type: 'image/jpeg' }),
+    body: JSON.stringify({ image: await toBase64(jpeg), media_type: 'image/jpeg', kind }),
   });
   const out = await r.json().catch(() => null);
   if (!r.ok || !out) throw new Error(`server error ${r.status}`);

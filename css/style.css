@@ -65,6 +65,11 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px s
 .card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font-size: .75rem; font-weight: 600; border-radius: 999px; padding: 1px 8px; border: 1px solid currentColor; }
 .tag.sample { color: var(--sample); }
+.tag.device { color: var(--accent); }
+.seg { display: flex; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.seg button { flex: 1; border: 0; border-radius: 0; background: var(--surface); color: inherit; padding: 10px 4px; }
+.seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+[data-types][hidden] { display: none !important; }
 .tag.used { color: var(--used); }
 .tag.ghs { color: var(--ghs); margin: 0 4px 4px 0; display: inline-block; }
 .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); padding: 16px; }

@@ -1,6 +1,6 @@
 # Lab Inventory
 
-A web app for tracking the lab's chemicals and external samples. Each shelf gets a QR code: scan it to see what is on the shelf and to add or remove items. You can search by name, CAS number, synonym (e.g. "IPA") or formula, and add materials by photographing the label. The UI is in English and Hebrew.
+A web app for tracking the lab's chemicals, external samples and devices. Each shelf gets a QR code: scan it to see what is on the shelf and to add or remove items. You can search by name, CAS number, synonym (e.g. "IPA") or formula, and add materials, samples or devices from a photo (one Add form with a type switch; AI fills in what it can read). The UI is in English and Hebrew.
 
 - **Server:** one Python program ([server/server.py](server/server.py)) on a lab computer that stays on. It serves the app, stores the inventory in a SQLite database, keeps the label photos, and reads labels with AI. It needs no outside database service.
 - **App:** plain HTML + JS with no build step ([index.html](index.html), [js/](js)). Phones open it from the server's address.
@@ -53,7 +53,7 @@ The app and `scripts/import_seed.py` use the same small API:
 - `POST /api/<table>`: insert a row.
 - `PATCH /api/<table>/<id>`: update a row. The events history cannot be changed.
 - `POST /api/upload`: upload a JPEG label photo.
-- `POST /api/extract-label`: read a label with AI. Limited to 120 per hour per device.
+- `POST /api/extract-label`: read a photo with AI (`kind`: chemical, sample or device). Limited to 120 per hour per device.
 
 There is no delete. Used-up items are marked instead and can be restored. Every add, edit, move and used-up action is recorded with who did it and when.
 
@@ -78,5 +78,5 @@ No login is needed. Anyone who can reach the server can view, add and edit, whic
 
 ## Tests
 
-- Unit tests: open `/tests/index.html` on the running server (21 tests: CAS checksum, search, PubChem parsing, translations, history logic, Excel export).
+- Unit tests: open `/tests/index.html` on the running server (22 tests: CAS checksum, search, PubChem parsing, translations, history logic, devices, Excel export).
 - End-to-end checklist and the last results: [tests/SELF_TEST_REPORT.md](tests/SELF_TEST_REPORT.md).

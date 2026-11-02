@@ -187,6 +187,19 @@ test('export: one row per item with fixed columns and readable location', async 
   eq(rows[0].Status, 'active');
 });
 
+test('devices: stored with maker, model and serial; found by serial; exported', async () => {
+  const db = createDb(mockBackend(memStore()));
+  const r = await db.addRoom('Lab'); const u = await db.addUnit(r.id, 'Bench'); const s = await db.addShelf(u.id, 'Left');
+  const d = await db.addItem({ type: 'device', name: 'Potentiostat', manufacturer: 'Metrohm', model: 'PGSTAT302N',
+    serial: 'AUT84512', asset_tag: '0012345', shelf_id: s.id }, 'Nir');
+  eq([d.type, d.manufacturer, d.model, d.serial, d.asset_tag], ['device', 'Metrohm', 'PGSTAT302N', 'AUT84512', '0012345']);
+  const items = await db.items();
+  eq(searchItems('AUT84512', items).map(i => i.id), [d.id]);
+  eq(searchItems('', items, { type: 'device' }).map(i => i.id), [d.id]);
+  const row = exportRows(items, await db.locations())[0];
+  eq([row.Type, row.Manufacturer, row.Model, row['Serial number'], row['Asset tag']], ['device', 'Metrohm', 'PGSTAT302N', 'AUT84512', '0012345']);
+});
+
 // ---- runner ----
 const out = document.getElementById('out');
 const results = [];

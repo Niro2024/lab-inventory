@@ -59,6 +59,8 @@ const fmtDate = s => (s ? new Date(s).toLocaleDateString(getLang() === 'he' ? 'h
 const fmtTime = s => (s ? new Date(s).toLocaleString(getLang() === 'he' ? 'he-IL' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '');
 const qty = i => (i.quantity ?? '') !== '' && i.quantity !== null ? `${i.quantity} ${i.unit || ''}`.trim() : '';
 const UNITS = ['g', 'mg', 'kg', 'mL', 'L', 'µL', 'mmol', 'pcs'];
+const TYPES = ['chemical', 'sample', 'device'];
+const TYPE_ICON = { chemical: '🧪', sample: '✉️', device: '🔧' };
 const KINDS = ['cabinet', 'fridge', 'freezer', 'flammables', 'acid', 'glovebox', 'other'];
 const KIND_ICON = { cabinet: '🗄️', fridge: '🧊', freezer: '❄️', flammables: '🔥', acid: '⚗️', glovebox: '🧤', other: '📦' };
 
@@ -122,14 +124,17 @@ function locationPicker(shelfId) {
   return { el: h('div', { class: 'loc-picker' }, room, unit, shelf), value: () => shelf.value || null };
 }
 
+const typeTag = i => (i.type === 'sample' || i.type === 'device') ? h('span', { class: `tag ${i.type}` }, t(`type_${i.type}`)) : null;
+const usedTag = i => i.status === 'used_up' ? h('span', { class: 'tag used' }, t(i.type === 'device' ? 'outOfUse' : 'usedUp')) : null;
+
 function itemCard(i, { actions } = {}) {
   return h('li', { class: `card ${i.status === 'used_up' ? 'used' : ''}` },
     h('a', { href: `#/item/${i.id}`, class: 'card-main' },
       h('div', { class: 'card-title' }, i.name,
-        i.type === 'sample' ? h('span', { class: 'tag sample' }, t('sample')) : null,
-        i.status === 'used_up' ? h('span', { class: 'tag used' }, t('usedUp')) : null),
+        typeTag(i), usedTag(i)),
       h('div', { class: 'card-meta' },
-        [i.cas && `CAS ${i.cas}`, qty(i), i.purity, i.type === 'sample' && i.sender && `${t('from')} ${i.sender}`].filter(Boolean).join(' · ')),
+        [i.cas && `CAS ${i.cas}`, qty(i), i.purity, i.type === 'sample' && i.sender && `${t('from')} ${i.sender}`,
+          i.type === 'device' && [i.manufacturer, i.model].filter(Boolean).join(' '), i.serial && `S/N ${i.serial}`].filter(Boolean).join(' · ')),
       h('div', { class: 'card-sub' }, `📍 ${shelfPath(state.loc, i.shelf_id) || t('noLocation')}`,
         ' · ', `${i.added_by || '—'}, ${fmtDate(i.created_at)}`)),
     actions ? h('div', { class: 'card-actions' }, actions) : null);
@@ -152,14 +157,14 @@ function moveControl(item, after) {
 const usedUpButton = (item, after) => h('button', { type: 'button', class: 'secondary', onclick: async () => {
   const who = requireMe(); if (!who) return;
   await db.markUsedUp(item.id, who); await refresh(); toast(t('markedUsedUp')); after();
-} }, t('markUsedUp'));
+} }, t(item.type === 'device' ? 'markOutOfUse' : 'markUsedUp'));
 
 // ---------- views ----------
 function viewSearch() {
   const q = h('input', { id: 'q', type: 'search', placeholder: t('searchPlaceholder'), 'aria-label': t('search'),
     value: params.get('q') || sessionStorage.getItem('labinv-q') || '' });
   const type = h('select', { id: 'type-filter', 'aria-label': t('type') },
-    h('option', { value: 'all' }, t('all')), h('option', { value: 'chemical' }, t('chemicals')), h('option', { value: 'sample' }, t('samples')));
+    h('option', { value: 'all' }, t('all')), h('option', { value: 'chemical' }, t('chemicals')), h('option', { value: 'sample' }, t('samples')), h('option', { value: 'device' }, t('devices')));
   const used = h('input', { type: 'checkbox', id: 'show-used' });
   const list = h('ul', { class: 'cards', id: 'results' });
   const count = h('p', { class: 'muted', id: 'count' });
@@ -174,7 +179,7 @@ function viewSearch() {
     h('section', { class: 'search-bar' }, q,
       h('div', { class: 'filters' }, type, h('label', {}, used, ' ', t('showUsedUp')))),
     state.items.length ? null : h('div', { class: 'empty' }, t('emptyInventory'), ' ',
-      h('a', { href: '#/locations' }, t('setUpLocations')), ' · ', h('a', { href: '#/add' }, t('addMaterial'))),
+      h('a', { href: '#/locations' }, t('setUpLocations')), ' · ', h('a', { href: '#/add' }, t('addNav'))),
     count, list);
   run();
   q.focus();
@@ -190,8 +195,7 @@ function viewShelf(id) {
   main().replaceChildren(
     h('h1', {}, `${KIND_ICON[u?.kind] || ''} ${shelfPath(state.loc, id)}`),
     h('div', { class: 'quick-add' },
-      h('a', { class: 'button', href: `#/add?shelf=${id}` }, `📷 ${t('addMaterialHere')}`),
-      h('a', { class: 'button secondary', href: `#/sample?shelf=${id}` }, `✉️ ${t('addSampleHere')}`)),
+      TYPES.map((k, n) => h('a', { class: `button ${n ? 'secondary' : ''}`, href: `#/add?type=${k}&shelf=${id}` }, `${TYPE_ICON[k]} ${t(`addHere_${k}`)}`))),
     h('p', { class: 'muted' }, t('nOnShelf', items.length)),
     h('ul', { class: 'cards' }, items.map(i => itemCard(i, { actions: [usedUpButton(i, rerender), moveControl(i, rerender)] }))));
 }
@@ -207,18 +211,18 @@ function viewItem(id) {
     h('strong', {}, t(`ev_${e.action}`)), ` — ${e.by || '—'}, ${fmtTime(e.at)}`,
     e.action === 'move' ? ` (${shelfPath(state.loc, e.details?.from) || '—'} → ${shelfPath(state.loc, e.details?.to)})` : ''))));
   main().replaceChildren(
-    h('h1', {}, i.name, i.type === 'sample' ? h('span', { class: 'tag sample' }, t('sample')) : null,
-      i.status === 'used_up' ? h('span', { class: 'tag used' }, t('usedUp')) : null),
+    h('h1', {}, i.name, typeTag(i), usedTag(i)),
     h('div', { class: 'detail' },
-      i.photo_url ? h('img', { src: i.photo_url, alt: t('labelPhoto'), class: 'photo' }) : null,
+      i.photo_url ? h('img', { src: i.photo_url, alt: t('photo'), class: 'photo' }) : null,
       h('dl', {},
         row('cas', i.cas && h('span', {}, i.cas, isValidCas(i.cas) ? '' : h('span', { class: 'warn' }, ` ⚠ ${t('casInvalid')}`))),
         row('formula', i.formula), row('quantity', qty(i)), row('purity', i.purity),
         row('ghs', (i.ghs || []).length ? h('span', {}, (i.ghs || []).map(g => h('span', { class: 'tag ghs' }, g))) : ''),
         row('sds', i.sds_url && h('a', { href: i.sds_url, target: '_blank', rel: 'noopener' }, t('openSafety'))),
         row('sender', i.sender), row('institution', i.institution),
+        row('manufacturer', i.manufacturer), row('model', i.model), row('serial', i.serial), row('assetTag', i.asset_tag),
         row('location', h('a', { href: `#/shelf/${i.shelf_id}` }, shelfPath(state.loc, i.shelf_id) || t('noLocation'))),
-        row(i.type === 'sample' ? 'receivedBy' : 'addedBy', i.added_by), row('dateAdded', fmtDate(i.created_at)),
+        row({ sample: 'receivedBy', device: 'responsible' }[i.type] || 'addedBy', i.added_by), row('dateAdded', fmtDate(i.created_at)),
         row('synonyms', (i.synonyms || []).join(', ')), row('notes', i.notes))),
     h('div', { class: 'actions' },
       h('a', { class: 'button secondary', href: `#/edit/${i.id}` }, t('edit')),
@@ -236,10 +240,14 @@ function field(label, input, hint) {
   return h('label', { class: 'field' }, h('span', {}, t(label)), input, hint || null);
 }
 
-function viewChemicalForm({ editId } = {}) {
+// One form for materials, samples and devices: the type switch at the top shows the fields that type needs.
+// Values typed so far are kept when the type changes.
+function viewItemForm({ editId, type: askedType } = {}) {
   const item = editId ? state.items.find(x => x.id === editId) : null;
   if (editId && !item) return main().replaceChildren(h('p', { class: 'empty' }, t('itemNotFound')));
   const v = item || {};
+  let type = item?.type || (TYPES.includes(askedType) ? askedType : prefs.get('labinv-addtype')) || 'chemical';
+  if (!TYPES.includes(type)) type = 'chemical';
   const f = {
     name: h('input', { name: 'name', required: true, value: v.name }),
     cas: h('input', { name: 'cas', value: v.cas, inputmode: 'numeric', placeholder: '67-63-0' }),
@@ -250,6 +258,12 @@ function viewChemicalForm({ editId } = {}) {
     purity: h('input', { name: 'purity', value: v.purity }),
     ghs: h('input', { name: 'ghs', value: (v.ghs || []).join(', ') }),
     sds_url: h('input', { name: 'sds_url', type: 'url', value: v.sds_url }),
+    sender: h('input', { name: 'sender', value: v.sender, placeholder: 'Thomas' }),
+    institution: h('input', { name: 'institution', value: v.institution }),
+    manufacturer: h('input', { name: 'manufacturer', value: v.manufacturer }),
+    model: h('input', { name: 'model', value: v.model }),
+    serial: h('input', { name: 'serial', value: v.serial }),
+    asset_tag: h('input', { name: 'asset_tag', value: v.asset_tag }),
     notes: h('textarea', { name: 'notes', rows: 2 }, v.notes || ''),
   };
   const casHint = h('small', { class: 'hint' });
@@ -263,12 +277,14 @@ function viewChemicalForm({ editId } = {}) {
   const loc = locationPicker(v.shelf_id || params.get('shelf') || new URLSearchParams(location.hash.split('?')[1]).get('shelf'));
   let who = v.added_by || me();
   const whoSel = memberSelect({ id: 'added-by', value: who, onchange: n => { who = n; } });
-  let photoBlob = null;
+  let photoFile = null, photoBlob = null;
   const preview = h('img', { class: 'photo preview', alt: '', hidden: true });
 
+  const TEXT = ['name', 'cas', 'formula', 'purity', 'sds_url', 'sender', 'institution', 'manufacturer', 'model', 'serial', 'asset_tag', 'notes'];
   const fillFrom = (src, { overwrite } = {}) => {
-    for (const k of ['name', 'cas', 'formula', 'purity', 'sds_url']) {
-      if (src[k] && (overwrite || !f[k].value)) f[k].value = src[k];
+    for (const k of TEXT) {
+      // notes are never replaced, only filled when empty
+      if (src[k] && (k === 'notes' ? !f.notes.value : overwrite || !f[k].value)) f[k].value = src[k];
     }
     if (src.quantity != null && (overwrite || !f.quantity.value)) f.quantity.value = src.quantity;
     if (src.unit && UNITS.includes(src.unit) && (overwrite || !f.quantity.value || src.quantity != null)) f.unit.value = src.unit;
@@ -295,32 +311,60 @@ function viewChemicalForm({ editId } = {}) {
     } catch (e) { status.textContent = `${t('pubchemError')} (${e.message})`; }
   };
 
-  const photo = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'photo', onchange: async () => {
-    const file = photo.files[0]; if (!file) return;
-    preview.src = URL.createObjectURL(file); preview.hidden = false;
-    photoBlob = MOCK ? await toJpeg(file, 600) : await toJpeg(file);
+  const readPhoto = async ({ overwrite }) => {
     status.textContent = t('readingLabel');
     try {
-      const r = await extractLabel(file, { mock: MOCK });
-      fillFrom(r, { overwrite: true });
+      const r = await extractLabel(photoFile, { mock: MOCK, kind: type });
+      fillFrom(r, { overwrite });
       status.textContent = r.name ? `✓ ${t('labelRead')}` : t('labelNotRead');
-      if (r.name || r.cas) await pubchem();
+      if (type === 'chemical' && (r.name || r.cas)) await pubchem();
     } catch (e) { status.textContent = `${t('labelError')} (${e.message})`; }
+  };
+
+  const photo = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'photo', onchange: async () => {
+    const file = photo.files[0]; if (!file) return;
+    photoFile = file;
+    preview.src = URL.createObjectURL(file); preview.hidden = false;
+    photoBlob = MOCK ? await toJpeg(file, 600) : await toJpeg(file);
+    await readPhoto({ overwrite: !item });
   } });
 
-  const form = h('form', { class: 'form', id: 'chem-form', onsubmit: async e => {
+  // fields shown only for some types
+  const only = (types, el) => { el.dataset.types = types; return el; };
+  const nameLabel = h('span', {}), whoLabel = h('span', {}), photoLabel = h('label', { class: 'button', for: 'photo' });
+  const typeButtons = TYPES.map(k => h('button', { type: 'button', role: 'radio', 'data-type': k, onclick: () => setType(k, true) },
+    `${TYPE_ICON[k]} ${t(`type_${k}`)}`));
+  const heading = h('h1', {});
+  const setType = (k, byUser) => {
+    const was = type; type = k;
+    if (!item) prefs.set('labinv-addtype', k);
+    for (const b of typeButtons) b.setAttribute('aria-checked', String(b.dataset.type === k));
+    for (const el of form.querySelectorAll('[data-types]')) el.hidden = !el.dataset.types.split(' ').includes(k);
+    nameLabel.textContent = t({ chemical: 'name', sample: 'sampleDescription', device: 'deviceName' }[k]);
+    f.name.placeholder = k === 'sample' ? t('sampleNameExample') : k === 'device' ? t('deviceNameExample') : '';
+    whoLabel.textContent = t({ chemical: 'addedBy', sample: 'receivedBy', device: 'responsible' }[k]);
+    photoLabel.textContent = `📷 ${t({ chemical: 'photoLabel', sample: 'photoSample', device: 'photoDevice' }[k])}`;
+    heading.textContent = item ? t('editItem') : t('addItem');
+    if (!f.quantity.value) f.unit.value = k === 'chemical' ? 'g' : 'pcs';
+    // a photo taken before the type was chosen: read it again for the new type, filling only empty fields
+    if (byUser && was !== k && photoFile) readPhoto({ overwrite: false });
+  };
+
+  const form = h('form', { class: 'form', id: 'item-form', onsubmit: async e => {
     e.preventDefault();
     if (!who) { toast(t('pickWhoAdded'), 'err'); return; }
     const shelf_id = loc.value();
     if (!shelf_id && !item) { toast(t('chooseShelf'), 'err'); return; }
     const split = s => s.split(',').map(x => x.trim()).filter(Boolean);
-    const data = {
-      type: 'chemical', name: f.name.value.trim(), cas: f.cas.value.trim() ? normalizeCas(f.cas.value) : null,
-      formula: f.formula.value.trim() || null, synonyms: split(f.synonyms.value),
-      quantity: f.quantity.value === '' ? null : Number(f.quantity.value), unit: f.unit.value,
-      purity: f.purity.value.trim() || null, ghs: split(f.ghs.value), sds_url: f.sds_url.value.trim() || null,
-      notes: f.notes.value.trim() || null, added_by: who,
-    };
+    const str = k => f[k].value.trim() || null;
+    const data = { type, name: f.name.value.trim(), notes: str('notes'), added_by: who };
+    if (type !== 'device') Object.assign(data, { quantity: f.quantity.value === '' ? null : Number(f.quantity.value), unit: f.unit.value });
+    if (type === 'chemical') Object.assign(data, {
+      cas: f.cas.value.trim() ? normalizeCas(f.cas.value) : null, formula: str('formula'), synonyms: split(f.synonyms.value),
+      purity: str('purity'), ghs: split(f.ghs.value), sds_url: str('sds_url'),
+    });
+    if (type === 'sample') Object.assign(data, { sender: str('sender'), institution: str('institution') });
+    if (type === 'device') Object.assign(data, { manufacturer: str('manufacturer'), model: str('model'), serial: str('serial'), asset_tag: str('asset_tag') });
     try {
       if (photoBlob) data.photo_url = await db.uploadPhoto(photoBlob);
       let saved;
@@ -333,58 +377,25 @@ function viewChemicalForm({ editId } = {}) {
       location.hash = `#/item/${saved.id}`;
     } catch (err) { toast(`${t('saveError')}: ${err.message}`, 'err'); }
   } },
-    item ? null : h('div', { class: 'photo-box' }, h('label', { class: 'button', for: 'photo' }, `📷 ${t('photoLabel')}`), photo, preview),
+    h('div', { class: 'seg', role: 'radiogroup', 'aria-label': t('type') }, typeButtons),
+    h('div', { class: 'photo-box' }, photoLabel, photo, preview),
     status,
-    field('name', f.name),
-    h('div', { class: 'row' }, field('cas', f.cas, casHint), field('formula', f.formula)),
-    h('button', { type: 'button', class: 'secondary', id: 'pubchem-btn', onclick: pubchem }, `🔎 ${t('lookUpPubchem')}`),
-    h('div', { class: 'row' }, field('quantity', f.quantity), field('unit', f.unit), field('purity', f.purity)),
-    field('ghs', f.ghs), field('sds', f.sds_url), field('synonyms', f.synonyms), field('notes', f.notes),
-    h('div', { class: 'field' }, h('span', {}, t('location')), loc.el),
-    h('div', { class: 'field' }, h('span', {}, t('addedBy')), whoSel),
-    h('p', { class: 'muted' }, `${t('dateAdded')}: ${fmtDate(v.created_at || new Date().toISOString())}`),
-    h('button', { type: 'submit', id: 'save-btn' }, item ? t('saveChanges') : t('save')));
-  main().replaceChildren(h('h1', {}, item ? t('editMaterial') : t('addMaterial')), form);
-}
-
-function viewSampleForm() {
-  const f = {
-    name: h('input', { name: 'name', required: true, placeholder: t('sampleNameExample') }),
-    sender: h('input', { name: 'sender', placeholder: 'Thomas' }),
-    institution: h('input', { name: 'institution' }),
-    quantity: h('input', { name: 'quantity', type: 'number', step: 'any', min: '0' }),
-    unit: h('select', { name: 'unit' }, UNITS.map(u => h('option', { value: u, selected: u === 'pcs' }, u))),
-    notes: h('textarea', { name: 'notes', rows: 2 }),
-  };
-  const loc = locationPicker(new URLSearchParams(location.hash.split('?')[1]).get('shelf'));
-  let who = me();
-  const whoSel = memberSelect({ id: 'received-by', value: who, onchange: n => { who = n; } });
-  const form = h('form', { class: 'form', id: 'sample-form', onsubmit: async e => {
-    e.preventDefault();
-    if (!who) return toast(t('pickWhoReceived'), 'err');
-    const shelf_id = loc.value();
-    if (!shelf_id) return toast(t('chooseShelf'), 'err');
-    try {
-      const saved = await db.addItem({
-        type: 'sample', name: f.name.value.trim(), sender: f.sender.value.trim() || null,
-        institution: f.institution.value.trim() || null,
-        quantity: f.quantity.value === '' ? null : Number(f.quantity.value), unit: f.unit.value,
-        notes: f.notes.value.trim() || null, shelf_id, added_by: who,
-      }, who);
-      prefs.set('labinv-me', who);
-      await refresh(); toast(t('saved'));
-      location.hash = `#/item/${saved.id}`;
-    } catch (err) { toast(`${t('saveError')}: ${err.message}`, 'err'); }
-  } },
-    field('sampleDescription', f.name),
-    h('div', { class: 'row' }, field('sender', f.sender), field('institution', f.institution)),
-    h('div', { class: 'row' }, field('quantity', f.quantity), field('unit', f.unit)),
+    h('label', { class: 'field' }, nameLabel, f.name),
+    only('chemical', h('div', { class: 'row' }, field('cas', f.cas, casHint), field('formula', f.formula))),
+    only('chemical', h('button', { type: 'button', class: 'secondary', id: 'pubchem-btn', onclick: pubchem }, `🔎 ${t('lookUpPubchem')}`)),
+    only('sample', h('div', { class: 'row' }, field('sender', f.sender), field('institution', f.institution))),
+    only('device', h('div', { class: 'row' }, field('manufacturer', f.manufacturer), field('model', f.model))),
+    only('device', h('div', { class: 'row' }, field('serial', f.serial), field('assetTag', f.asset_tag))),
+    only('chemical sample', h('div', { class: 'row' }, field('quantity', f.quantity), field('unit', f.unit),
+      only('chemical', field('purity', f.purity)))),
+    only('chemical', field('ghs', f.ghs)), only('chemical', field('sds', f.sds_url)), only('chemical', field('synonyms', f.synonyms)),
     field('notes', f.notes),
     h('div', { class: 'field' }, h('span', {}, t('location')), loc.el),
-    h('div', { class: 'field' }, h('span', {}, t('receivedBy')), whoSel),
-    h('p', { class: 'muted' }, `${t('dateAdded')}: ${fmtDate(new Date().toISOString())}`),
-    h('button', { type: 'submit', id: 'save-sample-btn' }, t('save')));
-  main().replaceChildren(h('h1', {}, t('addSample')), form);
+    h('div', { class: 'field' }, whoLabel, whoSel),
+    h('p', { class: 'muted' }, `${t('dateAdded')}: ${fmtDate(v.created_at || new Date().toISOString())}`),
+    h('button', { type: 'submit', id: 'save-btn' }, item ? t('saveChanges') : t('save')));
+  setType(type);
+  main().replaceChildren(heading, form);
 }
 
 function inlineAdd(placeholder, onAdd, extra) {
@@ -487,7 +498,7 @@ function viewLabels() {
 
 // ---------- shell ----------
 function renderHeader() {
-  const nav = [['#/', 'search', '🔍'], ['#/add', 'addMaterial', '📷'], ['#/sample', 'addSample', '✉️'], ['#/locations', 'locations', '🗄️']];
+  const nav = [['#/', 'search', '🔍'], ['#/add', 'addNav', '➕'], ['#/locations', 'locations', '🗄️']];
   const route = location.hash.split('?')[0] || '#/';
   mount(document.getElementById('header'),
     h('div', { class: 'top' },
@@ -514,9 +525,9 @@ function render() {
   switch (parts[0]) {
     case 'shelf': return viewShelf(parts[1]);
     case 'item': return viewItem(parts[1]);
-    case 'add': return viewChemicalForm();
-    case 'edit': return viewChemicalForm({ editId: parts[1] });
-    case 'sample': return viewSampleForm();
+    case 'add': return viewItemForm({ type: new URLSearchParams(location.hash.split('?')[1]).get('type') });
+    case 'edit': return viewItemForm({ editId: parts[1] });
+    case 'sample': return viewItemForm({ type: 'sample' }); // older links
     case 'locations': return viewLocations();
     case 'labels': return viewLabels();
     default: return viewSearch();

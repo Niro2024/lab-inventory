@@ -63,7 +63,7 @@ export function httpBackend(base = '', fetchFn = globalThis.fetch.bind(globalThi
 }
 
 const ITEM_FIELDS = ['type', 'name', 'cas', 'formula', 'synonyms', 'quantity', 'unit', 'purity', 'ghs',
-  'sds_url', 'sender', 'institution', 'shelf_id', 'added_by', 'photo_url', 'notes'];
+  'sds_url', 'sender', 'institution', 'manufacturer', 'model', 'serial', 'asset_tag', 'shelf_id', 'added_by', 'photo_url', 'notes'];
 
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 

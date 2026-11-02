@@ -13,7 +13,7 @@ API (the app's db.js `httpBackend` speaks this):
   POST  /api/<table>            insert one row (JSON with a string "id")
   PATCH /api/<table>/<id>       merge fields into a row (not allowed for events)
   POST  /api/upload             JPEG body -> {"url": "photos/..."}
-  POST  /api/extract-label      {"image": base64, "media_type": ...} -> label fields
+  POST  /api/extract-label      {"image": base64, "media_type": ..., "kind": chemical|sample|device} -> fields
   DELETE /api/<rooms|units|shelves>/<id>   remove a location that never held an item
   DELETE /api/members/<id>     take a name off the members list (items and history keep the name)
 Items and the history log can never be deleted.
@@ -141,9 +141,19 @@ class Store:
 
 
 # ---------- label reading ----------
-PROMPT = """This is a photo of a chemical bottle label from a research lab.
+PROMPTS = {
+    "chemical": """This is a photo of a chemical bottle label from a research lab.
 Read only what is printed on the label. Do not guess a CAS number that is not visible -
-leave it empty instead. Copy the CAS digits exactly."""
+leave it empty instead. Copy the CAS digits exactly.""",
+    "sample": """This is a photo of a research sample (a vial, tube, box or bag, often with a handwritten label)
+that the lab received or made. Read what is written: what the sample is, who sent or made it, their institution,
+and the amount. Put any other writing (dates, codes, concentrations, conditions) in notes.
+Leave a field empty when it is not written - do not guess.""",
+    "device": """This is a photo of a lab instrument or device, or of its nameplate / sticker.
+Give a short name of what it is (e.g. "Potentiostat", "Ultrasonic bath"), the manufacturer, model,
+serial number, and an asset / inventory tag number if a sticker shows one. Copy numbers exactly.
+Put other useful printed details (voltage, power, year) in notes. Leave a field empty when it is not visible.""",
+}
 
 _ai = {}
 
@@ -161,16 +171,34 @@ def ai_client(data_dir):
     return _ai["client"]
 
 
-def extract_label(data_dir, image_b64, media_type):
+def extract_label(data_dir, image_b64, media_type, kind="chemical"):
     from typing import Literal
     from pydantic import BaseModel, Field
+
+    Unit = Literal["g", "mg", "kg", "mL", "L", "µL", "mmol", "pcs", ""]
+
+    class Sample(BaseModel):
+        name: str = Field(description="What the sample is, e.g. '5 nm gold nanoparticles'")
+        sender: str = Field(description="Person who sent or made it, else empty")
+        institution: str = Field(description="Their institution or lab, else empty")
+        quantity: float | None = Field(description="Amount number if written")
+        unit: Unit
+        notes: str = Field(description="Other writing: dates, codes, concentration, conditions; else empty")
+
+    class Device(BaseModel):
+        name: str = Field(description="Short name of what the device is, in English")
+        manufacturer: str = Field(description="Manufacturer, else empty")
+        model: str = Field(description="Model name or number, else empty")
+        serial: str = Field(description="Serial number exactly as printed, else empty")
+        asset_tag: str = Field(description="Asset / inventory tag number from a sticker, else empty")
+        notes: str = Field(description="Other useful printed details, else empty")
 
     class Label(BaseModel):
         name: str = Field(description="Chemical or product name as printed, in English")
         cas: str = Field(description="CAS number like 67-63-0, or empty string if not printed")
         formula: str = Field(description="Molecular formula if printed, else empty")
         quantity: float | None = Field(description="Bottle size number, e.g. 500")
-        unit: Literal["g", "mg", "kg", "mL", "L", "µL", "mmol", "pcs", ""]
+        unit: Unit
         purity: str = Field(description="Purity or grade, e.g. '≥99.5%, ACS reagent', else empty")
         supplier: str = Field(description="Manufacturer, else empty")
 
@@ -178,10 +206,10 @@ def extract_label(data_dir, image_b64, media_type):
         model=os.environ.get("AI_MODEL", "claude-opus-5-5"),
         max_tokens=16000,
         output_config={"effort": "low"},
-        output_format=Label,
+        output_format={"sample": Sample, "device": Device}.get(kind, Label),
         messages=[{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
-            {"type": "text", "text": PROMPT},
+            {"type": "text", "text": PROMPTS.get(kind, PROMPTS["chemical"])},
         ]}],
     )
     if response.stop_reason == "refusal" or response.parsed_output is None:
@@ -277,7 +305,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return self.send_json({"error": "Missing image"}, 400)
                 media = "image/png" if req.get("media_type") == "image/png" else "image/jpeg"
                 try:
-                    return self.send_json(extract_label(self.store.dir, image, media))
+                    return self.send_json(extract_label(self.store.dir, image, media, req.get("kind") or "chemical"))
                 except Exception as e:  # AI problems must not break manual entry
                     print("extract-label:", e)
                     # 200, not 5xx: a tunnel in front replaces 5xx bodies with its own error page

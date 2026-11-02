@@ -65,7 +65,8 @@ export function scoreItem(query, item) {
     if (names.some(x => norm(x) === norm(n))) score = Math.max(score, 105);
   }
   // secondary fields count less
-  for (const f of [item.sender, item.institution, item.notes, item.added_by, item.purity]) {
+  for (const f of [item.sender, item.institution, item.notes, item.added_by, item.purity,
+    item.manufacturer, item.model, item.serial, item.asset_tag]) {
     score = Math.max(score, Math.round(scoreText(q, f) * 0.6));
   }
   if (item.cas && norm(item.cas).includes(q) && q.length >= 3) score = Math.max(score, 75);
