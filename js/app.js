@@ -321,13 +321,18 @@ function viewItemForm({ editId, type: askedType } = {}) {
     } catch (e) { status.textContent = `${t('labelError')} (${e.message})`; }
   };
 
-  const photo = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'photo', onchange: async () => {
-    const file = photo.files[0]; if (!file) return;
+  const usePhoto = async e => {
+    const file = e.target.files[0]; if (!file) return;
     photoFile = file;
     preview.src = URL.createObjectURL(file); preview.hidden = false;
     photoBlob = MOCK ? await toJpeg(file, 600) : await toJpeg(file);
     await readPhoto({ overwrite: !item });
-  } });
+    e.target.value = ''; // picking the same file again still fires change
+  };
+  // camera opens the phone camera; gallery (no capture) lets you pick a photo already taken
+  const photo = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'photo', onchange: usePhoto });
+  const gallery = h('input', { type: 'file', accept: 'image/*', id: 'photo-gallery', onchange: usePhoto });
+  const galleryLabel = h('label', { class: 'button secondary', for: 'photo-gallery' }, `🖼️ ${t('fromGallery')}`);
 
   // fields shown only for some types
   const only = (types, el) => { el.dataset.types = types; return el; };
@@ -378,7 +383,7 @@ function viewItemForm({ editId, type: askedType } = {}) {
     } catch (err) { toast(`${t('saveError')}: ${err.message}`, 'err'); }
   } },
     h('div', { class: 'seg', role: 'radiogroup', 'aria-label': t('type') }, typeButtons),
-    h('div', { class: 'photo-box' }, photoLabel, photo, preview),
+    h('div', { class: 'photo-box' }, photoLabel, photo, galleryLabel, gallery, preview),
     status,
     h('label', { class: 'field' }, nameLabel, f.name),
     only('chemical', h('div', { class: 'row' }, field('cas', f.cas, casHint), field('formula', f.formula))),
